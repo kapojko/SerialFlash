@@ -4,13 +4,20 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#define SERIALFLASH_PAGE_SIZE_DEF 256
-#define SERIALFLASH_SECTOR_SIZE_DEF (4 * 1024)
-#define SERIALFLASH_BLOCK_SIZE_DEF (64 * 1024)
+#define SERIALFLASH_PAGE_SIZE 256
+#define SERIALFLASH_SECTOR_SIZE (4 * 1024)
+#define SERIALFLASH_BLOCK_SIZE (64 * 1024)
 
+#define SERIALFLASH_MANUF_ID_ZBIT 0x50
 #define SERIALFLASH_MANUF_ID_WINBOND 0xEF // Winbond Serial Flash
 
-#define SERIALFLASH_DEV_ID_W25Q32JV 0x15
+#define SERIALFLASH_DEV_ID_Q80 0x13
+#define SERIALFLASH_DEV_ID_Q16 0x14
+#define SERIALFLASH_DEV_ID_Q32 0x15
+#define SERIALFLASH_DEV_ID_Q64 0x16
+#define SERIALFLASH_DEV_ID_Q128 0x17
+
+#define SERIALFLASH_CLOCK_FREQ_MAX_MHZ 50
 
 #define SERIALFLASH_PAGE_PROGRAM_TIME_MS_MAX 3
 #define SERIALFLASH_SECTOR_ERASE_TIME_MS_MAX 400
@@ -78,7 +85,6 @@ enum SerialFlash_WriteProtectSelection {
 };
 
 // Status Register-1 (SR1)
-__attribute__((packed))
 struct SerialFlash_StatusRegister1 {
     int srp0 : 1; // Status Register Protect 0
     int sec : 1; // Sector/Block Protect
@@ -89,12 +95,10 @@ struct SerialFlash_StatusRegister1 {
 };
 
 // Status Register-2 (SR2)
-__attribute__((packed))
 struct SerialFlash_StatusRegister2 {
     int sus : 1; // Suspend Status, Read only
     int cmp : 1; // Complement Protect
     int lb1_3 : 3; // Security Register Lock Bits, OTP
-    int reserved : 1;
     
     // Note: If the WP# or HOLD# / RESET# pins are tied directly to the power supply or ground during standard SPI or Dual SPI operation, the
     // QE bit should never be set to a 1.
@@ -104,16 +108,50 @@ struct SerialFlash_StatusRegister2 {
 };
 
 // Status Register-3 (SR3)
-__attribute__((packed))
 struct SerialFlash_StatusRegister3 {
     int hrsw : 1; // Hold/Reset Status
     int drv : 2; // Output Drive Strength
     int hfm : 1; // High Frequency Mode Enable Bit
-    int reserved1 : 1;
     int wps : 1; // Write Protect Selection
-    int reserved2 : 2;
 };
 
 // TODO: SFDP support
+
+// Low level API
+
+bool SerialFlash_SetWriteEnable(const struct SerialFlash_Platform *platform, bool enable);
+
+bool SerialFlash_SetPowerDown(const struct SerialFlash_Platform *platform, bool powerDown);
+bool SerialFlash_ReadManufDevId(const struct SerialFlash_Platform *platform, uint8_t *manufId, uint8_t *devId);
+bool SerialFlash_ReadUniqueId(const struct SerialFlash_Platform *platform, uint8_t *uniqueId64);
+
+bool SerialFlash_ReadData(const struct SerialFlash_Platform *platform, uint32_t address, uint8_t *data, uint32_t length);
+bool SerialFlash_FastRead(const struct SerialFlash_Platform *platform, uint32_t address, uint8_t *data, uint32_t length);
+
+bool SerialFlash_PageProgram(const struct SerialFlash_Platform *platform, uint32_t address, const uint8_t *data, uint32_t length);
+
+bool SerialFlash_SectorErase(const struct SerialFlash_Platform *platform, uint32_t address);
+bool SerialFlash_BlockErase(const struct SerialFlash_Platform *platform, uint32_t address, bool block64k);
+bool SerialFlash_ChipErase(const struct SerialFlash_Platform *platform);
+
+bool SerialFlash_ReadStatusRegister1(const struct SerialFlash_Platform *platform, struct SerialFlash_StatusRegister1 *status1);
+bool SerialFlash_WriteStatusRegister1(const struct SerialFlash_Platform *platform, const struct SerialFlash_StatusRegister1 *status1);
+bool SerialFlash_ReadStatusRegister2(const struct SerialFlash_Platform *platform, struct SerialFlash_StatusRegister2 *status2);
+bool SerialFlash_WriteStatusRegister2(const struct SerialFlash_Platform *platform, const struct SerialFlash_StatusRegister2 *status2);
+bool SerialFlash_ReadStatusRegister3(const struct SerialFlash_Platform *platform, struct SerialFlash_StatusRegister3 *status3);
+bool SerialFlash_WriteStatusRegister3(const struct SerialFlash_Platform *platform, const struct SerialFlash_StatusRegister3 *status3);
+
+bool SerialFlash_SetGlobalBlockLock(const struct SerialFlash_Platform *platform, bool lock);
+bool SerialFlash_SetBlockLock(const struct SerialFlash_Platform *platform, uint32_t address, bool lock);
+
+bool SerialFlash_Reset(const struct SerialFlash_Platform *platform);
+
+// Hight level API
+
+bool SerialFlash_ReadIds(const struct SerialFlash_Platform *platform, char *manufIdStr16, char *devIdStr16, char *uniqueIdStr24);
+bool SerialFlash_WaitBusy(const struct SerialFlash_Platform *platform, uint32_t timeout_ms);
+bool SerialFlash_Read(const struct SerialFlash_Platform *platform, uint32_t address, uint8_t *buffer, uint32_t length, uint32_t timeout_ms);
+bool SerialFlash_Erase(const struct SerialFlash_Platform *platform, uint32_t address, uint32_t length, uint32_t timeout_ms);
+bool SerialFlash_Write(const struct SerialFlash_Platform *platform, uint32_t address, const uint8_t *buffer, uint32_t length, uint32_t timeout_ms);
 
 #endif // SERIALFLASH_H
